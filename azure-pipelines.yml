@@ -1,0 +1,75 @@
+# ASP.NET
+# Build and test ASP.NET projects.
+# Add steps that publish symbols, save build artifacts, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/apps/aspnet/build-aspnet-4
+
+trigger:
+- main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  solution: '**/*.sln'
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+
+stages:
+- stage: build
+  jobs:
+    - job: build
+      steps:
+      - task: DotNetCoreCLI@2
+        inputs:
+          command: 'build'
+      - task: DotNetCoreCLI@2
+        inputs:
+          command: 'publish'
+          publishWebProjects: true
+          arguments: '-o $(build.artifactStagingDirectory)'
+          zipAfterPublish: false
+      - task: PublishPipelineArtifact@1
+        inputs:
+          targetPath: $(build.artifactStagingDirectory)
+          artifact: 'drop'
+          publishLocation: 'pipeline'
+      - task: NDependTask@1
+        inputs:
+          BinariesOutput: '$(build.artifactStagingDirectory)'
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+        
+- stage: test
+  jobs:
+    - job: test
+      steps:
+      - task: DotNetCoreCLI@2
+        inputs:
+          command: 'build'
+      - task: DotNetCoreCLI@2
+        inputs:
+          command: 'test'
+          projects: '**/*[Tt]est*/*.csproj'
+          publishTestResults: false
+          arguments: '/p:CollectCoverage=true /p:CoverletOutputFormat=cobertura --collect "Code coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura --settings:coverage.runsettings'
+      - task: PublishCodeCoverageResults@1
+        inputs:
+          codeCoverageTool: 'Cobertura'
+          summaryFileLocation: '**/*cobertura.xml'
+
+- stage: deploy_app
+  jobs:
+    - job: deploy
+      steps:
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: 'current'
+            artifactName: 'drop'
+            targetPath: '$(Pipeline.Workspace)/drop'
+        - task: AzureWebApp@1
+          inputs:
+            azureSubscription: 'Visual Studio Enterprise MVP(97fbe79d-f21c-4cd0-b87f-8bd8df413e0a)'
+            appType: 'webAppLinux'
+            appName: 'TodoistApp'
+            package: '$(Pipeline.Workspace)/drop'
+            runtimeStack: 'DOTNETCORE|6.0'
