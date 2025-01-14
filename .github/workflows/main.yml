@@ -52,10 +52,6 @@ jobs:
     - name: Run tests
       run: dotnet test --configuration Release --logger "trx" --collect:"XPlat Code Coverage"
 
-    - name: Upload code coverage
-      uses: codecov/codecov-action@v2
-      with:
-        file: **/*.cobertura.xml
 
   deploy:
     runs-on: ubuntu-latest
